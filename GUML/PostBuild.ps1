@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$zipName = "vividstasisModLoader-$Version.zip"
+$zipName = "GamemakerUniversalModLoader-$Version.zip"
 $zipPath = Join-Path $PublishDir $zipName
 $smbUploadDir = "\\duskbreaker_sat\TVOFiles\模组加载器\"
 

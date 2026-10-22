@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public static partial class StringExtensions
 {

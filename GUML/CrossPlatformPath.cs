@@ -1,4 +1,4 @@
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 /// <summary>
 /// Normalizes user/mod-provided filesystem paths so both '\\' and '/' work on every OS.

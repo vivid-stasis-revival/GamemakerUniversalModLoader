@@ -2,7 +2,7 @@ using UndertaleModLib;
 using NPOI.SS.UserModel;
 using NPOI.XSSF.UserModel;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class StringReplacer(UndertaleData data,string modDir)
 {

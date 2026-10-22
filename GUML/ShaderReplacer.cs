@@ -2,7 +2,7 @@ using UndertaleModLib;
 using UndertaleModLib.Models;
 using UndertaleModLib.Scripting;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class ShaderReplacer(UndertaleData data, string modDir)
 {

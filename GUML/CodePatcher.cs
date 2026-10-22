@@ -6,7 +6,7 @@ using UndertaleModLib.Compiler;
 using UndertaleModLib.Decompiler;
 using UndertaleModLib.Models;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class CodePatcher(UndertaleData data, string modDir)
 {
@@ -17,6 +17,11 @@ public class CodePatcher(UndertaleData data, string modDir)
     private GlobalDecompileContext _globalDecompileContext;
     private Dictionary<string, string> _cachedCodes = [];
     private HashSet<string> _replacedEntries = [];
+
+    // Mod codepatches are authored against the legacy decompiler output, which prints string
+    // formatting calls as @@string@@("{0}...", ...) instead of $"..." interpolation. Disable
+    // template string cleanup so that Find strings written in that form keep matching.
+    private static readonly DecompileSettings _patchDecompileSettings = new() { CleanupTemplateStrings = false };
 
     const string objectPrefix = "gml_Object_";
 
@@ -227,9 +232,17 @@ public bool Exist()
             switch (patch.Type)
             {
                 case PatchType.Replace:
+                    if (!text.Contains(patch.Find))
+                    {
+                        ConsoleOutput.PrintWarning($"补丁未匹配：{patch.Entry} :: {Summarize(patch.Find)}", $"Patch did not match: {patch.Entry} :: {Summarize(patch.Find)}");
+                    }
                     text = text.Replace(patch.Find, patch.Value);
                     break;
                 case PatchType.ReplaceOnce:
+                    if (!text.Contains(patch.Find))
+                    {
+                        ConsoleOutput.PrintWarning($"补丁未匹配：{patch.Entry} :: {Summarize(patch.Find)}", $"Patch did not match: {patch.Entry} :: {Summarize(patch.Find)}");
+                    }
                     text = text.ReplaceFirst(patch.Find, patch.Value);
                     break;
                 case PatchType.InsertBefore:
@@ -272,12 +285,19 @@ public bool Exist()
             return $"// This code entry is a reference to an anonymous function within \"{code.ParentEntry.Name.Content}\", decompile that instead.";
         try
         {
-            return new DecompileContext(_globalDecompileContext, code).DecompileToString();
+            return new DecompileContext(_globalDecompileContext, code, _patchDecompileSettings).DecompileToString();
         }
         catch (Exception e)
         {
             return "/*\nDECOMPILER FAILED!\n\n" + e + "\n*/";
         }
+    }
+
+    private static string Summarize(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return "";
+        var oneLine = text.Replace("\r", "").Replace("\n", "\\n");
+        return oneLine.Length > 80 ? oneLine[..80] + "..." : oneLine;
     }
 
     public static string InsertCode(string gmlCode, string functionName, PatchType type, string codeToInsert)

@@ -3,12 +3,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using UndertaleModLib;
-using vividstasisModLoader;
-using static vividstasisModLoader.ConsoleOutput;
-
-// 版本以及修改日志移至AppInfo.cs以便于在不同模块统一引用
-// string VERSION = AppInfo.VERSION;
-// string CHANGE_LOG = AppInfo.CHANGE_LOG;
+using GamemakerUniversalModLoader;
+using static GamemakerUniversalModLoader.ConsoleOutput;
 
 // 判断路径中是否包含中文或少量真正危险的特殊字符。
 bool HasUnsafePathCharacters(string path)
@@ -102,25 +98,19 @@ string ResolveDirectoryOption(string[] inputArgs, string optionName, string defa
 void PrintHelp()
 {
     var buildDate = GetBuildDate();
-    Console.WriteLine($"VSML-Cross {AppInfo.VERSION} [Build:{buildDate}]");
-    Console.WriteLine("Cross-platform VividStasis data patcher");
+    var exeName = Path.GetFileName(Environment.ProcessPath ?? AppContext.BaseDirectory);
+    Console.WriteLine($"GamemakerUniversalModLoaderExe Ver.{AppInfo.VERSION} Build:{buildDate}");
+    Console.WriteLine("Made with love by DawnHisomeru - Fork from VSML");
     Console.WriteLine();
-    Console.WriteLine("Usage:");
-    Console.WriteLine("  VSML-Cross --data <path>");
-    Console.WriteLine("  VSML-Cross --data <path> --overwrite");
+    Console.WriteLine($"{exeName}  --help, -h                         Show this help");
+    Console.WriteLine($"{exeName}  --data <path> [--overwrite/--ow]   Specific (overwrite) any gamemaker VM file (data.win/game.droid/data.unx/game.ios)");
+    Console.WriteLine($"{exeName}  --mods <path>                      Read mods from this directory");
+    Console.WriteLine($"{exeName}  --app-logs <path>                  Specific log output directory");
+    Console.WriteLine($"{exeName}  --silent                           Write logs to default log directory without console output");
     Console.WriteLine();
-    Console.WriteLine("Input path:");
-    Console.WriteLine("  data.win, game.droid, or game.ios");
+    Console.WriteLine("Default output directory: <data output directory>/data/xxx.win");
+    Console.WriteLine("Default log directory: <current directory>/app-logs/xxx.log");
     Console.WriteLine();
-    Console.WriteLine("Output:");
-    Console.WriteLine("  Default: <input-directory>/data/game-YYYYMMDDHHMMSS.win");
-    Console.WriteLine("  --overwrite / --ow: modify the input file in place");
-    Console.WriteLine();
-    Console.WriteLine("Options:");
-    Console.WriteLine("  --help, -h       Show this help");
-    Console.WriteLine("  --mods <path>    Read mods from this directory");
-    Console.WriteLine("  --app-logs <path> Write logs to this directory");
-    Console.WriteLine("  --silent         Write logs to app-logs without console output");
 }
 
 string GetBuildDate()
@@ -159,35 +149,26 @@ string ResolveOutputPath(string inputPath, bool overwrite)
 
 void ValidateInputPath(string inputPath)
 {
-    var fileName = Path.GetFileName(inputPath);
-    if (!fileName.Equals("data.win", StringComparison.OrdinalIgnoreCase)
-        && !fileName.Equals("game.droid", StringComparison.OrdinalIgnoreCase)
-        && !fileName.Equals("game.ios", StringComparison.OrdinalIgnoreCase))
+    if (string.IsNullOrWhiteSpace(inputPath))
     {
-        throw new ArgumentException("--data must point to data.win, game.droid, or game.ios.");
+        throw new ArgumentException("--data must specify an input file path.");
+    }
+
+    var extension = Path.GetExtension(inputPath);
+
+    if (!new[] { ".win", ".droid", ".unx", ".ios" }
+        .Contains(extension, StringComparer.OrdinalIgnoreCase))
+    {
+        throw new ArgumentException(
+            "--data must point to xxx.win, xxx.droid, xxx.unx or xxx.ios.");
     }
 
     if (!File.Exists(inputPath))
     {
-        throw new FileNotFoundException($"Input data file was not found: {inputPath}", inputPath);
+        throw new FileNotFoundException(
+            $"Input data file was not found: {inputPath}",
+            inputPath);
     }
-}
-
-string? GetAutoInstallGamePath(string[] inputArgs)
-{
-    for (var index = 0; index < inputArgs.Length - 1; index++)
-    {
-        if (!string.Equals(inputArgs[index], "--auto-install", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(inputArgs[index], "auto-install", StringComparison.OrdinalIgnoreCase))
-        {
-            continue;
-        }
-
-        var candidate = inputArgs[index + 1];
-        return candidate.StartsWith("-", StringComparison.Ordinal) ? null : candidate;
-    }
-
-    return null;
 }
 
 // 生成一键还原脚本，便于用户快速回退。
@@ -199,161 +180,17 @@ void CreateRestoreScript(bool dryRun)
         return;
     }
 
-    File.WriteAllText("./restore.cmd", "vividstasisModLoader restore");
+    // 使用实际的可执行文件名，避免硬编码。
+    var exeName = Path.GetFileName(Environment.ProcessPath ?? AppContext.BaseDirectory);
+    File.WriteAllText("./restore.cmd", $".\"{exeName}\" restore\r\n");
 }
 
-// 读取配置文件，若不存在或解析失败则返回默认配置。
-ModLoaderConfig LoadConfig()
-{
-    if (!File.Exists("./config.json"))
-    {
-        return new ModLoaderConfig();
-    }
-
-    using var document = JsonDocument.Parse(File.ReadAllText("./config.json"));
-    var root = document.RootElement;
-    return new ModLoaderConfig
-    {
-        GamePath = ReadJsonString(root, "game_path", ReadJsonString(root, "GamePath", string.Empty))
-    };
-}
-
-string ReadJsonString(JsonElement root, string name, string fallback)
-{
-    return root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
-        ? value.GetString() ?? fallback
-        : fallback;
-}
-
-string QuoteJsonString(string value)
-{
-    return $"\"{JsonEncodedText.Encode(value).ToString()}\"";
-}
-
-string SerializeGamePathConfig(GamePathConfig config)
-{
-    return "{\n"
-        + $"  \"game_path\": {QuoteJsonString(config.GamePath)},\n"
-        + $"  \"force_custom_path\": {config.ForceUseCustomPath.ToString().ToLowerInvariant()}\n"
-        + "}\n";
-}
-
-string SerializeModLoaderConfig(ModLoaderConfig config)
-{
-    return "{\n"
-        + $"  \"game_path\": {QuoteJsonString(config.GamePath)}\n"
-        + "}\n";
-}
-
-// 判断候选目录是否为可读取的 vivid/stasis 游戏目录。
+// 判断候选目录是否为可读取的 Gamemaker 游戏目录。
 bool IsUsableGamePath(string? gamePath)
 {
     return !string.IsNullOrWhiteSpace(gamePath)
         && Directory.Exists(CrossPlatformPath.NormalizeSeparators(gamePath))
         && File.Exists(Path.Combine(CrossPlatformPath.NormalizeSeparators(gamePath), "data.win"));
-}
-
-// 从 VML 可执行文件目录创建或读取 path.json。
-// 通过 BVO 启动时 AppContext.BaseDirectory 同样指向 BVO 的 vml 目录。
-GamePathConfig LoadOrCreateGamePathConfig()
-{
-    var pathConfigFile = Path.Combine(AppContext.BaseDirectory, "path.json");
-    var defaultConfig = new GamePathConfig
-    {
-        ForceCustomPath = false
-    };
-
-    if (!File.Exists(pathConfigFile))
-    {
-        try
-        {
-            var json = SerializeGamePathConfig(defaultConfig);
-            File.WriteAllText(pathConfigFile, json);
-            PrintInfo(
-                $"已创建游戏路径配置：{pathConfigFile}",
-                $"Created game path configuration: {pathConfigFile}"
-            );
-        }
-        catch (Exception e)
-        {
-            PrintWarning(
-                $"无法创建 path.json：{e.Message}",
-                $"Could not create path.json: {e.Message}"
-            );
-        }
-
-        return defaultConfig;
-    }
-
-    try
-    {
-        using var document = JsonDocument.Parse(File.ReadAllText(pathConfigFile));
-        var root = document.RootElement;
-        return new GamePathConfig
-        {
-            GamePath = ReadJsonString(root, "game_path", defaultConfig.GamePath),
-            ForceUseCustomPath = root.TryGetProperty("force_custom_path", out var forceValue)
-                && forceValue.ValueKind == JsonValueKind.True
-        };
-    }
-    catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException)
-    {
-        PrintWarning(
-            $"无法读取 path.json，将忽略自定义路径：{e.Message}",
-            $"Could not read path.json; the custom path will be ignored: {e.Message}"
-        );
-        return defaultConfig;
-    }
-}
-
-// 自动检测游戏目录，检测失败时再使用 path.json 的 game_path。
-string ResolveGamePath(GamePathConfig pathConfig, bool allowInteractiveInput = true)
-{
-    var detectedGamePath = string.Empty;
-
-    if (IsUsableGamePath(detectedGamePath))
-    {
-        return detectedGamePath;
-    }
-
-    if (IsUsableGamePath(pathConfig.GamePath))
-    {
-        PrintWarning(
-            "自动检测游戏目录失败，正在使用 path.json 中的 game_path。",
-            "Automatic game path detection failed; using game_path from path.json."
-        );
-        return CrossPlatformPath.NormalizeSeparators(pathConfig.GamePath);
-    }
-
-    if (!allowInteractiveInput)
-    {
-        throw new DirectoryNotFoundException(
-            "自动安装模式未能自动找到 vivid/stasis 游戏目录。请传入 --auto-install <gamePath>。"
-        );
-    }
-
-    PrintWarning(
-        "自动检测和 path.json 均未提供有效游戏目录，请手动输入。",
-        "Neither automatic detection nor path.json provided a valid game directory; please enter one manually."
-    );
-    return AskGamePath();
-}
-
-// force_custom_path 启用时只接受 path.json 的 game_path，不再读取 IPC 或注册表路径。
-string ResolveForcedCustomGamePath(GamePathConfig pathConfig)
-{
-    if (!IsUsableGamePath(pathConfig.GamePath))
-    {
-        throw new DirectoryNotFoundException(
-            "path.json 已启用 force_custom_path，但 game_path 不是包含 data.win 的有效游戏目录。"
-        );
-    }
-
-    PrintInfo(
-        "path.json 已启用 force_custom_path，已绕过全部游戏目录自动获取。",
-        "force_custom_path is enabled in path.json; all automatic game path discovery has been bypassed."
-    );
-    return CrossPlatformPath.NormalizeSeparators(pathConfig.GamePath);
 }
 
 // 在还原模式下恢复备份文件并删除备份目录。
@@ -400,125 +237,6 @@ bool TryRestoreFromBackup(bool restoreMode, bool dryRun, string backupFolderPath
     }
 
     return true;
-}
-
-// 根据游戏版本准备备份，并在已有备份时先回滚 data.win 与音频组。
-void PrepareBackup(string gamePath, string dataFilePath, string backupFolderPath, bool dryRun)
-{
-    var backupDataPath = Path.Combine(backupFolderPath, "data.win");
-    var gameVerPath = Path.Combine(gamePath, "ver");
-    var backupVerPath = Path.Combine(backupFolderPath, "ver");
-
-    if (dryRun)
-    {
-        PrintInfo($"[dry-run] 将确保备份目录存在：{backupFolderPath}", $"[dry-run] Would ensure backup folder exists: {backupFolderPath}");
-    }
-    else
-    {
-        Directory.CreateDirectory(backupFolderPath);
-    }
-
-    var gameVer = File.ReadAllText(gameVerPath);
-    if (File.Exists(backupVerPath))
-    {
-        var backupVer = File.ReadAllText(backupVerPath);
-        if (gameVer != backupVer)
-        {
-            if (dryRun)
-            {
-                PrintWarning($"[dry-run] 版本不一致，将删除旧备份目录：{backupFolderPath}", $"[dry-run] Version mismatch, would delete old backup folder: {backupFolderPath}");
-            }
-            else
-            {
-                Directory.Delete(backupFolderPath, true);
-            }
-        }
-    }
-
-    if (dryRun)
-    {
-        PrintInfo($"[dry-run] 将重新创建备份目录：{backupFolderPath}", $"[dry-run] Would recreate backup folder: {backupFolderPath}");
-    }
-    else
-    {
-        Directory.CreateDirectory(backupFolderPath);
-    }
-
-    if (File.Exists(backupDataPath))
-    {
-        if (dryRun)
-        {
-            PrintInfo($"[dry-run] 将从备份恢复：{backupDataPath} -> {dataFilePath}", $"[dry-run] Would restore from backup: {backupDataPath} -> {dataFilePath}");
-        }
-        else
-        {
-            File.Copy(backupDataPath, dataFilePath, true);
-        }
-
-        foreach (var file in Directory.GetFiles(backupFolderPath, "*.dat"))
-        {
-            var targetFile = Path.Combine(gamePath, Path.GetFileName(file));
-            if (dryRun)
-            {
-                PrintInfo($"[dry-run] 将恢复音频组：{file} -> {targetFile}", $"[dry-run] Would restore audiogroup: {file} -> {targetFile}");
-            }
-            else
-            {
-                File.Copy(file, targetFile, true);
-            }
-        }
-
-        if (dryRun)
-        {
-            PrintInfo("[dry-run] 已模拟从备份恢复 data.win 与音频组。", "[dry-run] Simulated restoring data.win and audiogroups from backup.");
-        }
-        else
-        {
-            PrintInfo("已从备份恢复 data.win 和音频组文件。", "Restored data.win and audiogroups from backup.");
-        }
-    }
-    else
-    {
-        if (dryRun)
-        {
-            PrintInfo($"[dry-run] 将创建 data.win 备份：{dataFilePath} -> {backupDataPath}", $"[dry-run] Would backup data.win: {dataFilePath} -> {backupDataPath}");
-        }
-        else
-        {
-            File.Copy(dataFilePath, backupDataPath);
-        }
-
-        foreach (var file in Directory.GetFiles(gamePath, "*.dat"))
-        {
-            var targetFile = Path.Combine(backupFolderPath, Path.GetFileName(file));
-            if (dryRun)
-            {
-                PrintInfo($"[dry-run] 将备份音频组：{file} -> {targetFile}", $"[dry-run] Would backup audiogroup: {file} -> {targetFile}");
-            }
-            else
-            {
-                File.Copy(file, targetFile, true);
-            }
-        }
-
-        if (dryRun)
-        {
-            PrintInfo($"[dry-run] 将备份版本文件：{gameVerPath} -> {backupVerPath}", $"[dry-run] Would backup version file: {gameVerPath} -> {backupVerPath}");
-        }
-        else
-        {
-            File.Copy(gameVerPath, backupVerPath);
-        }
-
-        if (dryRun)
-        {
-            PrintSuccess("[dry-run] 备份创建模拟完成。", "[dry-run] Backup creation simulation completed.");
-        }
-        else
-        {
-            PrintSuccess("已创建备份文件。", "Backup file created.");
-        }
-    }
 }
 
 // 获取 mods 目录下的所有模组目录。
@@ -894,30 +612,6 @@ void SaveDataFile(FileInfo dataFile, UndertaleData data, bool dryRun)
     }
 }
 
-// 持久化当前配置到 config.json。
-void SaveConfig(ModLoaderConfig config, bool dryRun)
-{
-    if (dryRun)
-    {
-        PrintInfo("[dry-run] 将写入 config.json。", "[dry-run] Would write config.json.");
-        return;
-    }
-
-    File.WriteAllText("./config.json", SerializeModLoaderConfig(config));
-}
-
-// 修补完成后暂停，便于查看日志输出。
-void PauseAfterPatch(bool dryRun)
-{
-    PrintSection("修补流程完成", "Patch flow completed");
-
-    if (dryRun)
-    {
-        PrintInfo("[dry-run] 未实际写入任何文件。", "[dry-run] No files were actually modified.");
-    }
-    PrintPauseHint();
-}
-
 // 统一执行跨平台数据文件修补流程。此版本只处理 --data 指定的文件，
 // 不访问注册表、不创建备份、不覆盖 raw 文件，也不包含任何 IPC 联动。
 void Run(string[] inputArgs)
@@ -944,7 +638,7 @@ void Run(string[] inputArgs)
     var modsPath = ResolveDirectoryOption(inputArgs, "--mods", Path.Combine(executableDirectory, "mods"));
     Environment.CurrentDirectory = executableDirectory;
 
-    PrintAppBanner("vividstasis 模组加载器 (Cross-platform)", "vividstasis Mod Loader (Cross-platform)", AppInfo.VERSION, AppInfo.CHANGE_LOG);
+    PrintAppBanner("Gamemaker 模组加载器 (Cross-platform)", "vividstasis Mod Loader (Cross-platform)", AppInfo.VERSION, AppInfo.CHANGE_LOG);
     PrintInfo($"输入文件：{inputPath}", $"Input file: {inputPath}");
     PrintInfo($"输出文件：{outputPath}", $"Output file: {outputPath}");
     PrintInfo($"模组目录：{modsPath}", $"Mods directory: {modsPath}");
@@ -1001,29 +695,6 @@ catch (Exception e)
         Console.Error.WriteLine(e);
     }
     Environment.ExitCode = 1;
-}
-
-// 配置对象，保存基础运行参数。
-class ModLoaderConfig
-{
-    public string GamePath { get; set; } = string.Empty;
-}
-
-class GamePathConfig
-{
-    [JsonPropertyName("game_path")]
-    public string GamePath { get; set; } = string.Empty;
-
-    [JsonPropertyName("force_use_custom_path")]
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-    public bool ForceUseCustomPath { get; set; }
-
-    [JsonPropertyName("force_custom_path")]
-    public bool? ForceCustomPath { get; set; }
-
-    // 新字段存在时以新字段为准；旧配置缺少新字段时兼容原字段。
-    [JsonIgnore]
-    public bool ShouldForceCustomPath => ForceCustomPath ?? ForceUseCustomPath;
 }
 
 

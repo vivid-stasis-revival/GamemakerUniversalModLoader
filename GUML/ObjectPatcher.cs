@@ -2,7 +2,7 @@ using System.Text.Json;
 using UndertaleModLib;
 using UndertaleModLib.Models;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class ObjectPatcher(UndertaleData data, string modDir)
 {
@@ -28,6 +28,18 @@ public class ObjectPatcher(UndertaleData data, string modDir)
                 Awake = root.TryGetProperty("Awake", out var awake) && awake.ValueKind == JsonValueKind.True
             };
             if (string.IsNullOrEmpty(objectPatch.Name)) continue;
+
+            // Don't add a duplicate if the object already exists (e.g. the loader is being
+            // re-applied to an already patched data file). Duplicate objects would make
+            // asset references and event linking resolve to different objects.
+            var existing = data.GameObjects.ByName(objectPatch.Name);
+            if (existing is not null)
+            {
+                existing.ParentId = data.GameObjects.ByName(objectPatch.Parent);
+                existing.Awake = objectPatch.Awake;
+                continue;
+            }
+
             var obj = new UndertaleGameObject();
             obj.Name = data.Strings.MakeString(objectPatch.Name);
             obj.ParentId = data.GameObjects.ByName(objectPatch.Parent);

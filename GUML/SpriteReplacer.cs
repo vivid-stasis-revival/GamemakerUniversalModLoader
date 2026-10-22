@@ -5,7 +5,7 @@ using UndertaleModLib;
 using UndertaleModLib.Models;
 using UndertaleModLib.Util;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class SpriteReplacer(UndertaleData data,string modDir)
 {

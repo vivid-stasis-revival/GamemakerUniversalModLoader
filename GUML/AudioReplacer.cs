@@ -1,7 +1,7 @@
 using UndertaleModLib;
 using UndertaleModLib.Models;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class AudioReplacer(UndertaleData data, string gameDir, string modDir)
 {

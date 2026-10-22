@@ -1,7 +1,7 @@
 using Spectre.Console;
 using System.Text;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 /// <summary>
 /// 统一管理控制台双语输出与样式渲染。

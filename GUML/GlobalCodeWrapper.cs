@@ -6,7 +6,7 @@ using UndertaleModLib.Compiler;
 using UndertaleModLib.Decompiler;
 using UndertaleModLib.Models;
 
-namespace vividstasisModLoader;
+namespace GamemakerUniversalModLoader;
 
 public class GlobalCodeWrapper(UndertaleData data, string modDir, HashSet<string> replacedEntries)
 {
